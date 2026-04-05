@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <zip.h>
 
@@ -54,36 +55,65 @@ static void walk(zip_t *za, NotebookEntry *root) {
 }
 
 NotebookEntry *read_archive() {
-	FILE *fp = fopen("notebook.nn", "rb");
-    if (!fp) { perror("fopen"); return NULL; }
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    zip_buf = malloc(sz);
-    fread(zip_buf, 1, sz, fp);
-    fclose(fp);
-
-    zip_error_t zerr;
-    zip_source_t *src = zip_source_buffer_create(zip_buf, (zip_uint64_t)sz, 0, &zerr);
-    if (!src) {
-        fprintf(stderr, "zip_source_buffer_create: %s\n", zip_error_strerror(&zerr));
-        free(zip_buf);
-        return NULL;
-    }
-
-    za = zip_open_from_source(src, ZIP_RDONLY, &zerr);
-    if (!za) {
-        fprintf(stderr, "zip_open_from_source: %s\n", zip_error_strerror(&zerr));
-        zip_source_free(src);
-        free(zip_buf);
-        return NULL;
-    }
+    int zerr;
+    za = zip_open("notebook.nn", 0, &zerr);
 
 	NotebookEntry *root_node = create_entry(NULL, create_str("/", -1), create_str(NULL, -1));
 	root_node->is_folder = true;
     walk(za, root_node);
 
     return root_node;
+}
+
+char *read_zip_file(char *file) {
+	struct zip_file *f = zip_fopen(za, file, 0);
+	if (f == NULL)
+		return NULL;
+
+	struct zip_stat stat;
+	if (zip_stat(za, file, 0, &stat) == -1)
+		return NULL;
+
+	char *content = malloc(sizeof(char) * (stat.size + 1));
+	if (zip_fread(f, content, stat.size) == -1)
+		return NULL;
+	content[stat.size] = '\0';
+
+	zip_fclose(f);
+
+	return content;
+}
+
+int write_zip_file(char *file, char *content) {
+	struct zip_file *f = zip_fopen(za, file, 0);
+	if (f == NULL)
+		return -1;
+
+	struct zip_error err;
+	struct zip_source *zip_content = zip_source_buffer_create(content, strlen(content), true, &err);
+	if (zip_content == NULL) {
+		printf("ZIP WRITE ERR:\n%s\n%d\n%s (%d)\n", err.str, err.sys_err, err.zip_err == ZIP_ER_INVAL ? "ZIP_ER_INVAL" : err.zip_err == ZIP_ER_MEMORY ? "ZIP_ER_MEMORY" : "unknown err...", err.zip_err);
+		return -1;
+	}
+
+	int f_index = zip_name_locate(za, file, 0);
+	if (f_index == -1) {
+		if (zip_file_add(za, file, zip_content, 0) == -1) {
+			printf("ZIP FILE CREATION ERR:\n%s\n", zip_strerror(za));
+			zip_source_free(zip_content);
+			return -1;
+		}
+	}
+	else {
+		if (zip_file_replace(za, f_index, zip_content, 0) == -1) {
+			zip_source_free(zip_content);
+			printf("ZIP FILE SAVE ERR:\n%s\n", zip_strerror(za));
+			return -1;
+		}
+	}
+
+	zip_fclose(f);
+	return 0;
 }
 
 int cleanup_archive(NotebookEntry *root_node) {

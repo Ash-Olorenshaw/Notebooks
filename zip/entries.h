@@ -10,6 +10,7 @@ typedef struct NotebookEntry {
 	int max_child, child_count;
 	bool is_folder;
 	struct NotebookEntry **children;
+	char *content;
 } NotebookEntry;
 
 NotebookEntry *create_entry(NotebookEntry *parent, string *entry_name, string *zip_name);

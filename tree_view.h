@@ -7,5 +7,6 @@
 GtkWidget *create_tree_child(const char *subtitle, bool folder);
 void add_tree_child(GtkWidget *parent, GtkWidget *child);
 GtkWidget *create_tree(NotebookEntry *book);
+void update_render_text();
 
 #endif

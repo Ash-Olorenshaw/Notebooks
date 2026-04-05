@@ -5,5 +5,7 @@
 
 NotebookEntry *read_archive();
 int cleanup_archive(NotebookEntry *root_node);
+char *read_zip_file(char *file);
+int write_zip_file(char *file, char *content);
 
 #endif
